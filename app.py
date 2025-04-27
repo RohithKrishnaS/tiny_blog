@@ -10,7 +10,7 @@ db = SQLAlchemy(app)
 
 # Dummy user credentials
 USERNAME = 'admin'
-PASSWORD = 'password'
+PASSWORD = 'rohith#@'
 
 # Define the Post model
 class Post(db.Model):
