@@ -1,75 +1,71 @@
-from flask import Flask, render_template, request, redirect
-import sqlite3
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 
 app = Flask(__name__)
+app.secret_key = 'supersecretkey'  # needed for session management
 
-# Database setup
-def init_db():
-    conn = sqlite3.connect('blog.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL
-        )
-    ''')
-    conn.commit()
-    conn.close()
+posts = []  # this will hold our blog posts for now
 
-init_db()
+# Dummy user credentials (for now)
+USERNAME = 'admin'
+PASSWORD = 'rohith'
 
-# Routes
+# Home Page
 @app.route('/')
 def home():
-    conn = sqlite3.connect('blog.db')
-    c = conn.cursor()
-    c.execute('SELECT * FROM posts')
-    posts = c.fetchall()
-    conn.close()
     return render_template('home.html', posts=posts)
 
-@app.route('/add', methods=['GET', 'POST'])
-def add_post():
+# Create New Post
+@app.route('/create', methods=['GET', 'POST'])
+def create():
+    if not session.get('logged_in'):
+        flash("Please log in to create a post!")
+        return redirect(url_for('login'))
     if request.method == 'POST':
         title = request.form['title']
         content = request.form['content']
-        
-        conn = sqlite3.connect('blog.db')
-        c = conn.cursor()
-        c.execute('INSERT INTO posts (title, content) VALUES (?, ?)', (title, content))
-        conn.commit()
-        conn.close()
-        
-        return redirect('/')
-    return render_template('add_post.html')
+        posts.append({'title': title, 'content': content})
+        return redirect(url_for('home'))
+    return render_template('create.html')
 
-@app.route('/edit/<int:post_id>', methods=['GET', 'POST'])
-def edit_post(post_id):
-    conn = sqlite3.connect('blog.db')
-    c = conn.cursor()
-
+# Edit Post
+@app.route('/edit/<int:index>', methods=['GET', 'POST'])
+def edit(index):
+    if not session.get('logged_in'):
+        flash("Please log in to edit a post!")
+        return redirect(url_for('login'))
+    post = posts[index]
     if request.method == 'POST':
-        new_title = request.form['title']
-        new_content = request.form['content']
-        c.execute('UPDATE posts SET title = ?, content = ? WHERE id = ?', (new_title, new_content, post_id))
-        conn.commit()
-        conn.close()
-        return redirect('/')
+        posts[index]['title'] = request.form['title']
+        posts[index]['content'] = request.form['content']
+        return redirect(url_for('home'))
+    return render_template('edit.html', post=post, index=index)
 
-    c.execute('SELECT * FROM posts WHERE id = ?', (post_id,))
-    post = c.fetchone()
-    conn.close()
-    return render_template('edit_post.html', post=post)
+# Delete Post
+@app.route('/delete/<int:index>', methods=['POST'])
+def delete(index):
+    if not session.get('logged_in'):
+        flash("Please log in to delete a post!")
+        return redirect(url_for('login'))
+    posts.pop(index)
+    return redirect(url_for('home'))
 
-@app.route('/delete/<int:post_id>')
-def delete_post(post_id):
-    conn = sqlite3.connect('blog.db')
-    c = conn.cursor()
-    c.execute('DELETE FROM posts WHERE id = ?', (post_id,))
-    conn.commit()
-    conn.close()
-    return redirect('/')
+# Login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        if username == USERNAME and password == PASSWORD:
+            session['logged_in'] = True
+            flash("You are now logged in!")
+            return redirect(url_for('home'))
+        else:
+            flash("Invalid credentials. Try again.")
+    return render_template('login.html')
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Logout
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    flash("You have been logged out.")
+    return redirect(url_for('home'))
